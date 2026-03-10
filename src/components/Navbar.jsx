@@ -13,12 +13,12 @@ function Navbar() {
   return (
     <nav className="navbar">
       <div className="navbar-container">
-        <Link to="/" className="navbar-brand">
+        {/* <Link to="/" className="navbar-brand">
           Hospital Appointment System
-        </Link>
+        </Link> */}
         <div className="navbar-links">
-          <Link to="/">Home</Link>
-          <Link to="/booking">Book Appointment</Link>
+          {/* <Link to="/">Home</Link>
+          <Link to="/booking">Book Appointment</Link> */}
           {isAdmin && (
             <>
               <Link to="/admin/dashboard">Dashboard</Link>

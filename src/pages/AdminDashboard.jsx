@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getAllDoctors, createDoctorLogin, uploadDoctorPhoto, getDoctorCredentials } from '../api/api';
+import { getAllDoctors, createDoctorLogin, uploadDoctorPhoto, getDoctorCredentials, getAdminAppointments, updateAppointmentStatus } from '../api/api';
 
 function AdminDashboard() {
   const [doctors, setDoctors] = useState([]);
   const [assignedCredentials, setAssignedCredentials] = useState([]);
+  const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [activeTab, setActiveTab] = useState('credentials');
+  const [activeTab, setActiveTab] = useState('appointments');
   const navigate = useNavigate();
 
   const [selectedDoctor, setSelectedDoctor] = useState(null);
@@ -30,6 +31,7 @@ function AdminDashboard() {
     }
     loadDoctors();
     loadCredentials();
+    loadAppointments();
   }, [navigate]);
 
   const loadDoctors = async () => {
@@ -60,6 +62,30 @@ function AdminDashboard() {
     } catch (err) {
       console.error('Failed to load credentials:', err);
       // Don't show error to user as this is not critical on page load
+    }
+  };
+
+  const loadAppointments = async () => {
+    try {
+      const data = await getAdminAppointments();
+      setAppointments(data.appointments || []);
+    } catch (err) {
+      console.error('Failed to load appointments:', err);
+    }
+  };
+
+  const handleStatusUpdate = async (appointmentId, newStatus) => {
+    try {
+      setLoading(true);
+      setError('');
+      setSuccess('');
+      await updateAppointmentStatus(appointmentId, newStatus);
+      setSuccess('Appointment status updated successfully');
+      await loadAppointments();
+    } catch (err) {
+      setError(err.message || 'Failed to update appointment status');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -189,6 +215,13 @@ function AdminDashboard() {
       {/* Tabs */}
       <div className="modern-tabs">
         <button
+          className={`modern-tab ${activeTab === 'appointments' ? 'active' : ''}`}
+          onClick={() => { setActiveTab('appointments'); setError(''); setSuccess(''); }}
+        >
+          <span className="tab-icon">📅</span>
+          Appointments
+        </button>
+        <button
           className={`modern-tab ${activeTab === 'credentials' ? 'active' : ''}`}
           onClick={() => { setActiveTab('credentials'); setError(''); setSuccess(''); }}
         >
@@ -206,6 +239,126 @@ function AdminDashboard() {
 
       {error && <div className="error-message">{error}</div>}
       {success && <div className="success-message">{success}</div>}
+
+      {/* Appointments Tab */}
+      {activeTab === 'appointments' && (
+        <div className="appointments-section">
+          <div className="section-header">
+            <span className="section-icon">📅</span>
+            <div>
+              <h2>Patient Appointments</h2>
+              <p>View and manage all booking requests</p>
+            </div>
+            <button onClick={loadAppointments} className="btn-refresh">
+              🔄 Refresh
+            </button>
+          </div>
+
+          <div className="registry-info">
+            Showing {appointments.length} appointment{appointments.length !== 1 ? 's' : ''}
+          </div>
+
+          {appointments.length > 0 ? (
+            <div className="appointments-table-container">
+              <table className="credentials-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>PATIENT NAME</th>
+                    <th>CONTACT</th>
+                    <th>DOCTOR</th>
+                    <th>DEPARTMENT</th>
+                    <th>DATE & TIME</th>
+                    <th>STATUS</th>
+                    <th>ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {appointments.map((appointment, index) => (
+                    <tr key={appointment.id}>
+                      <td>{index + 1}</td>
+                      <td>
+                        <div className="patient-cell">
+                          <strong>{appointment.patient_name}</strong>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="contact-cell">
+                          {appointment.phone_number && <div>📞 {appointment.phone_number}</div>}
+                          {appointment.email && <div>✉️ {appointment.email}</div>}
+                        </div>
+                      </td>
+                      <td>
+                        <div className="doctor-cell">
+                          <div className="doctor-avatar-small">
+                            {appointment.doctor_name ? appointment.doctor_name.charAt(0) : 'D'}
+                          </div>
+                          <span>{appointment.doctor_name || `DOC-${appointment.doctor_code}`}</span>
+                        </div>
+                      </td>
+                      <td>{appointment.department_name || appointment.department_code}</td>
+                      <td>
+                        {new Date(appointment.appointment_date).toLocaleString('en-US', {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </td>
+                      <td>
+                        <span className={`status-badge status-${appointment.status}`}>
+                          {appointment.status.toUpperCase()}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="action-buttons">
+                          {appointment.status === 'pending' && (
+                            <>
+                              <button 
+                                className="btn-action confirm"
+                                onClick={() => handleStatusUpdate(appointment.id, 'confirmed')}
+                                disabled={loading}
+                              >
+                                ✓ Confirm
+                              </button>
+                              <button 
+                                className="btn-action delete"
+                                onClick={() => handleStatusUpdate(appointment.id, 'cancelled')}
+                                disabled={loading}
+                              >
+                                ✗ Cancel
+                              </button>
+                            </>
+                          )}
+                          {appointment.status === 'confirmed' && (
+                            <button 
+                              className="btn-action complete"
+                              onClick={() => handleStatusUpdate(appointment.id, 'completed')}
+                              disabled={loading}
+                            >
+                              ✓ Complete
+                            </button>
+                          )}
+                          {(appointment.status === 'completed' || appointment.status === 'cancelled') && (
+                            <span className="status-final">No actions</span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="empty-state">
+              <div className="empty-icon">📅</div>
+              <h3>No appointments found</h3>
+              <p>No booking requests have been made yet</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Credentials Tab */}
       {activeTab === 'credentials' && (

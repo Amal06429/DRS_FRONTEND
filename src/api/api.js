@@ -188,3 +188,21 @@ export const getDoctorCredentials = async () => {
   });
   return handleResponse(response);
 };
+
+// Update appointment status (Admin only)
+export const updateAppointmentStatus = async (appointmentId, status) => {
+  if (!getCsrfToken()) {
+    await fetchCsrfToken();
+  }
+  const csrfToken = getCsrfToken();
+  const response = await fetch(`${API_BASE_URL}/admin/appointments/${appointmentId}/status`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': csrfToken,
+    },
+    credentials: 'include',
+    body: JSON.stringify({ status }),
+  });
+  return handleResponse(response);
+};
