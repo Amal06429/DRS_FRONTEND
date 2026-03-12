@@ -3,14 +3,13 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import BookingForm from '../components/BookingForm';
 import DepartmentList from '../components/DepartmentList';
 import DoctorList from '../components/DoctorList';
-import { getDepartments, getDoctorsByDepartment, getDoctorTiming, bookAppointment } from '../api/api';
+import { getDepartments, getDoctorsByDepartment, bookAppointment } from '../api/api';
 
 function Booking() {
   const [departments, setDepartments] = useState([]);
   const [doctors, setDoctors] = useState([]);
   const [selectedDepartment, setSelectedDepartment] = useState(null);
   const [selectedDoctor, setSelectedDoctor] = useState(null);
-  const [timing, setTiming] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -33,12 +32,6 @@ function Booking() {
       loadDoctors(selectedDepartment.code || selectedDepartment.department_code);
     }
   }, [selectedDepartment]);
-
-  useEffect(() => {
-    if (selectedDoctor) {
-      loadTiming(selectedDoctor.code || selectedDoctor.doctor_code);
-    }
-  }, [selectedDoctor]);
 
   const loadDepartments = async () => {
     try {
@@ -67,24 +60,10 @@ function Booking() {
     }
   };
 
-  const loadTiming = async (doctorCode) => {
-    try {
-      setLoading(true);
-      setError('');
-      const data = await getDoctorTiming(doctorCode);
-      setTiming(data);
-    } catch (err) {
-      setError(err.message || 'Failed to load doctor timing');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleSelectDepartment = (department) => {
     setSelectedDepartment(department);
     setSelectedDoctor(null);
     setDoctors([]);
-    setTiming(null);
   };
 
   const handleSelectDoctor = (doctor) => {
@@ -95,7 +74,6 @@ function Booking() {
     setSelectedDepartment(null);
     setDoctors([]);
     setSelectedDoctor(null);
-    setTiming(null);
     setError('');
   };
 
@@ -144,7 +122,6 @@ function Booking() {
           <BookingForm
             department={selectedDepartment}
             doctor={selectedDoctor}
-            timing={timing}
             onSubmit={handleSubmit}
             onCancel={handleCancel}
           />

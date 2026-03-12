@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getAllDoctors, createDoctorLogin, uploadDoctorPhoto, getDoctorCredentials, getAdminAppointments, updateAppointmentStatus } from '../api/api';
+import { getAllDoctors, createDoctorLogin, uploadDoctorPhoto, getDoctorCredentials, getAdminAppointments, updateAppointmentStatus, updateDoctorCredentials } from '../api/api';
 
 function AdminDashboard() {
   const [doctors, setDoctors] = useState([]);
@@ -23,16 +23,27 @@ function AdminDashboard() {
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
 
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingCredential, setEditingCredential] = useState(null);
+  const [editForm, setEditForm] = useState({
+    email: '',
+    password: '',
+  });
+
   useEffect(() => {
     const isAdmin = sessionStorage.getItem('isAdmin');
     if (!isAdmin) {
       navigate('/admin');
       return;
     }
-    loadDoctors();
-    loadCredentials();
-    loadAppointments();
+    loadInitialData();
   }, [navigate]);
+
+  const loadInitialData = async () => {
+    await loadDoctors();
+    await loadCredentials();
+    await loadAppointments();
+  };
 
   const loadDoctors = async () => {
     try {
@@ -40,8 +51,10 @@ function AdminDashboard() {
       setError('');
       const data = await getAllDoctors();
       setDoctors(data);
+      return data;
     } catch (err) {
       setError(err.message || 'Failed to load doctors');
+      return [];
     } finally {
       setLoading(false);
     }
@@ -50,14 +63,19 @@ function AdminDashboard() {
   const loadCredentials = async () => {
     try {
       const data = await getDoctorCredentials();
-      const formattedCredentials = data.map((cred, index) => ({
-        id: cred.id || index + 1,
-        doctor: `${cred.doctor_name} - DOC-${cred.doctor_code}`,
-        doctorCode: cred.doctor_code,
-        doctorName: cred.doctor_name,
-        email: cred.email,
-        department: cred.department,
-      }));
+      const formattedCredentials = data.map((cred, index) => {
+        // Find the full doctor object to get profile photo
+        const fullDoctor = doctors.find(d => d.code === cred.doctor_code);
+        return {
+          id: cred.id || index + 1,
+          doctor: `${cred.doctor_name} - DOC-${cred.doctor_code}`,
+          doctorCode: cred.doctor_code,
+          doctorName: cred.doctor_name,
+          email: cred.email,
+          department: cred.department,
+          doctorObject: fullDoctor, // Include full doctor object
+        };
+      });
       setAssignedCredentials(formattedCredentials);
     } catch (err) {
       console.error('Failed to load credentials:', err);
@@ -181,8 +199,17 @@ function AdminDashboard() {
       await uploadDoctorPhoto(selectedDoctorForPhoto.code, formData);
       setSuccess(`Profile photo uploaded successfully for ${selectedDoctorForPhoto.name}`);
       
-      // Refresh doctors list to show updated photo
-      await loadDoctors();
+      // Refresh doctors list and credentials to show updated photo
+      const updatedDoctors = await loadDoctors();
+      await loadCredentials();
+      
+      // Update selectedDoctor if it's the one we just uploaded photo for
+      if (selectedDoctor && selectedDoctor.code === selectedDoctorForPhoto.code) {
+        const updatedDoctor = updatedDoctors.find(d => d.code === selectedDoctorForPhoto.code);
+        if (updatedDoctor) {
+          setSelectedDoctor(updatedDoctor);
+        }
+      }
       
       setShowPhotoModal(false);
       setPhotoFile(null);
@@ -190,6 +217,63 @@ function AdminDashboard() {
       setSelectedDoctorForPhoto(null);
     } catch (err) {
       setError(err.message || 'Failed to upload photo');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOpenEditModal = (credential) => {
+    setEditingCredential(credential);
+    setEditForm({
+      email: credential.email,
+      password: '',
+    });
+    setShowEditModal(true);
+    setError('');
+    setSuccess('');
+  };
+
+  const handleEditFormChange = (e) => {
+    setEditForm({
+      ...editForm,
+      [e.target.name]: e.target.value,
+    });
+  };
+
+  const handleUpdateCredentials = async (e) => {
+    e.preventDefault();
+    if (!editingCredential) return;
+
+    try {
+      setLoading(true);
+      setError('');
+      setSuccess('');
+
+      const updateData = {};
+      if (editForm.email !== editingCredential.email) {
+        updateData.email = editForm.email;
+      }
+      if (editForm.password) {
+        updateData.password = editForm.password;
+      }
+
+      if (Object.keys(updateData).length === 0) {
+        setError('No changes detected');
+        setLoading(false);
+        return;
+      }
+
+      await updateDoctorCredentials(editingCredential.doctorCode, updateData);
+      setSuccess(`Credentials updated successfully for ${editingCredential.doctorName}`);
+
+      // Reload credentials
+      await loadCredentials();
+
+      setShowEditModal(false);
+      setEditingCredential(null);
+      setEditForm({ email: '', password: '' });
+    } catch (err) {
+      setError(err.message || 'Failed to update credentials');
     } finally {
       setLoading(false);
     }
@@ -227,13 +311,6 @@ function AdminDashboard() {
         >
           <span className="tab-icon">🔐</span>
           Login Credentials
-        </button>
-        <button
-          className={`modern-tab ${activeTab === 'doctors' ? 'active' : ''}`}
-          onClick={() => { setActiveTab('doctors'); setError(''); setSuccess(''); }}
-        >
-          <span className="tab-icon">👨‍⚕️</span>
-          Doctors List
         </button>
       </div>
 
@@ -317,30 +394,21 @@ function AdminDashboard() {
                             <>
                               <button 
                                 className="btn-action confirm"
-                                onClick={() => handleStatusUpdate(appointment.id, 'confirmed')}
+                                onClick={() => handleStatusUpdate(appointment.id, 'accepted')}
                                 disabled={loading}
                               >
-                                ✓ Confirm
+                                ✓ Accept
                               </button>
                               <button 
                                 className="btn-action delete"
-                                onClick={() => handleStatusUpdate(appointment.id, 'cancelled')}
+                                onClick={() => handleStatusUpdate(appointment.id, 'rejected')}
                                 disabled={loading}
                               >
-                                ✗ Cancel
+                                ✗ Reject
                               </button>
                             </>
                           )}
-                          {appointment.status === 'confirmed' && (
-                            <button 
-                              className="btn-action complete"
-                              onClick={() => handleStatusUpdate(appointment.id, 'completed')}
-                              disabled={loading}
-                            >
-                              ✓ Complete
-                            </button>
-                          )}
-                          {(appointment.status === 'completed' || appointment.status === 'cancelled') && (
+                          {(appointment.status === 'accepted' || appointment.status === 'rejected') && (
                             <span className="status-final">No actions</span>
                           )}
                         </div>
@@ -402,6 +470,13 @@ function AdminDashboard() {
                   ) : (
                     <span>{selectedDoctor.name.charAt(0)}</span>
                   )}
+                  <button 
+                    onClick={() => handleOpenPhotoModal(selectedDoctor)}
+                    className="btn-upload-photo-overlay"
+                    type="button"
+                  >
+                    📷 Upload Photo
+                  </button>
                 </div>
                 <div className="doctor-details">
                   <h3>Dr. {selectedDoctor.name}</h3>
@@ -480,7 +555,15 @@ function AdminDashboard() {
                     <td>
                       <div className="doctor-cell">
                         <div className="doctor-avatar-small">
-                          {credential.doctorName.charAt(0)}
+                          {credential.doctorObject?.profile_photo ? (
+                            <img 
+                              src={credential.doctorObject.profile_photo} 
+                              alt={credential.doctorName}
+                              style={{width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover'}}
+                            />
+                          ) : (
+                            <span>{credential.doctorName.charAt(0)}</span>
+                          )}
                         </div>
                         <span>{credential.doctor}</span>
                       </div>
@@ -490,7 +573,20 @@ function AdminDashboard() {
                       <span className="password-hidden">••••••••</span>
                     </td>
                     <td>
-                      <button className="btn-action">Edit</button>
+                      {credential.doctorObject && (
+                        <button 
+                          className="btn-action"
+                          onClick={() => handleOpenPhotoModal(credential.doctorObject)}
+                        >
+                          📷 Upload Photo
+                        </button>
+                      )}
+                      <button 
+                        className="btn-action"
+                        onClick={() => handleOpenEditModal(credential)}
+                      >
+                        ✏️ Edit
+                      </button>
                       <button className="btn-action delete">Delete</button>
                     </td>
                   </tr>
@@ -507,73 +603,6 @@ function AdminDashboard() {
         )}
       </div>
         </>
-      )}
-
-      {/* Doctors List Tab */}
-      {activeTab === 'doctors' && (
-        <div className="doctors-list-section">
-          <div className="section-header">
-            <span className="section-icon">👨‍⚕️</span>
-            <div>
-              <h2>All Doctors</h2>
-              <p>Manage doctor profiles and photos</p>
-            </div>
-            <button onClick={loadDoctors} className="btn-refresh">
-              🔄 Refresh
-            </button>
-          </div>
-
-          {doctors && doctors.length > 0 ? (
-            <div className="doctors-grid-modern">
-              {doctors.map((doctor) => (
-                <div key={doctor.code} className="doctor-card-modern">
-                  <div className="doctor-card-photo-section">
-                    {doctor.profile_photo ? (
-                      <img 
-                        src={doctor.profile_photo} 
-                        alt={doctor.name}
-                        className="doctor-card-image"
-                      />
-                    ) : (
-                      <div className="doctor-card-placeholder">
-                        <span>{doctor.name.charAt(0)}</span>
-                      </div>
-                    )}
-                    <button 
-                      onClick={() => handleOpenPhotoModal(doctor)}
-                      className="btn-upload-photo"
-                    >
-                      📷 Upload Photo
-                    </button>
-                  </div>
-                  <div className="doctor-card-info">
-                    <h3>Dr. {doctor.name}</h3>
-                    <p className="doctor-qualification">{doctor.qualification || 'N/A'}</p>
-                    <div className="doctor-meta">
-                      <span className="meta-item">
-                        <strong>Code:</strong> {doctor.code}
-                      </span>
-                      <span className="meta-item">
-                        <strong>Dept:</strong> {doctor.department}
-                      </span>
-                      {doctor.rate && (
-                        <span className="meta-item">
-                          <strong>Rate:</strong> ₹{doctor.rate}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="empty-state">
-              <div className="empty-icon">👨‍⚕️</div>
-              <h3>No doctors found</h3>
-              <p>No doctors are currently available in the system</p>
-            </div>
-          )}
-        </div>
       )}
 
       {/* Photo Upload Modal */}
@@ -620,6 +649,89 @@ function AdminDashboard() {
                 <button
                   type="button"
                   onClick={() => setShowPhotoModal(false)}
+                  className="btn-secondary"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Credentials Modal */}
+      {showEditModal && editingCredential && (
+        <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h3>Edit Credentials</h3>
+            <p className="modal-subtitle">
+              Doctor: {editingCredential.doctorName} ({editingCredential.doctorCode})
+            </p>
+            
+            <form onSubmit={handleUpdateCredentials} className="edit-credentials-form">
+              {/* Photo Upload Section */}
+              {editingCredential.doctorObject && (
+                <div className="edit-photo-section">
+                  <div className="current-photo">
+                    {editingCredential.doctorObject.profile_photo ? (
+                      <img 
+                        src={editingCredential.doctorObject.profile_photo} 
+                        alt={editingCredential.doctorName}
+                        className="doctor-photo-large"
+                      />
+                    ) : (
+                      <div className="doctor-photo-placeholder-large">
+                        <span>{editingCredential.doctorName.charAt(0)}</span>
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowEditModal(false);
+                      handleOpenPhotoModal(editingCredential.doctorObject);
+                    }}
+                    className="btn-change-photo"
+                  >
+                    📷 Change Photo
+                  </button>
+                </div>
+              )}
+
+              <div className="form-group">
+                <label htmlFor="edit-email">Email *</label>
+                <input
+                  type="email"
+                  id="edit-email"
+                  name="email"
+                  value={editForm.email}
+                  onChange={handleEditFormChange}
+                  placeholder="doctor@hospital.com"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="edit-password">New Password</label>
+                <input
+                  type="password"
+                  id="edit-password"
+                  name="password"
+                  value={editForm.password}
+                  onChange={handleEditFormChange}
+                  placeholder="Leave blank to keep current password"
+                  minLength="6"
+                />
+                <small className="form-hint">Leave blank if you don't want to change the password</small>
+              </div>
+
+              <div className="form-buttons">
+                <button type="submit" className="btn-primary" disabled={loading}>
+                  {loading ? 'Updating...' : 'Update Credentials'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
                   className="btn-secondary"
                 >
                   Cancel

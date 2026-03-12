@@ -20,7 +20,31 @@ const getCsrfToken = () => {
 const handleResponse = async (response) => {
   if (!response.ok) {
     const error = await response.json().catch(() => ({ message: 'An error occurred' }));
-    throw new Error(error.message || error.error || 'Request failed');
+    
+    // Extract error message from various possible formats
+    let errorMessage;
+    
+    // Check if error.error is an array (Django REST Framework validation errors)
+    if (error.error && Array.isArray(error.error)) {
+      errorMessage = error.error.join(', ');
+    } 
+    // Check if error.error is a string
+    else if (error.error) {
+      errorMessage = error.error;
+    }
+    // Check other common error formats
+    else if (error.message) {
+      errorMessage = error.message;
+    }
+    else if (error.detail) {
+      errorMessage = error.detail;
+    }
+    // Fallback to JSON string
+    else {
+      errorMessage = JSON.stringify(error);
+    }
+    
+    throw new Error(errorMessage);
   }
   return response.json();
 };
@@ -203,6 +227,24 @@ export const updateAppointmentStatus = async (appointmentId, status) => {
     },
     credentials: 'include',
     body: JSON.stringify({ status }),
+  });
+  return handleResponse(response);
+};
+
+// Update doctor credentials (Admin only)
+export const updateDoctorCredentials = async (doctorCode, credentialData) => {
+  if (!getCsrfToken()) {
+    await fetchCsrfToken();
+  }
+  const csrfToken = getCsrfToken();
+  const response = await fetch(`${API_BASE_URL}/admin/doctor-credentials/${doctorCode}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': csrfToken,
+    },
+    credentials: 'include',
+    body: JSON.stringify(credentialData),
   });
   return handleResponse(response);
 };
