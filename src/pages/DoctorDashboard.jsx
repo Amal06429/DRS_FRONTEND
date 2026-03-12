@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getDoctorAppointments, getDoctorOwnProfile, updateDoctorOwnProfile } from '../api/api';
+import { getDoctorAppointments, getDoctorOwnProfile } from '../api/api';
 
 function DoctorDashboard() {
   const [appointments, setAppointments] = useState([]);
@@ -8,9 +8,6 @@ function DoctorDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [photoFile, setPhotoFile] = useState(null);
-  const [photoPreview, setPhotoPreview] = useState(null);
-  const [showPhotoUpload, setShowPhotoUpload] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -27,7 +24,6 @@ function DoctorDashboard() {
     try {
       const data = await getDoctorOwnProfile();
       setProfile(data.doctor);
-      setPhotoPreview(data.doctor.profile_photo);
     } catch (err) {
       console.error('Failed to load profile:', err);
     }
@@ -42,48 +38,6 @@ function DoctorDashboard() {
       setAppointments(data);
     } catch (err) {
       setError(err.message || 'Failed to load appointments');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePhotoChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setPhotoFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPhotoPreview(reader.result);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleUploadPhoto = async (e) => {
-    e.preventDefault();
-    if (!photoFile) {
-      setError('Please select a photo to upload');
-      return;
-    }
-    
-    try {
-      setLoading(true);
-      setError('');
-      setSuccess('');
-      
-      const formData = new FormData();
-      formData.append('profile_photo', photoFile);
-      
-      await updateDoctorOwnProfile(formData);
-      setSuccess('Profile photo updated successfully');
-      
-      // Reload profile
-      await loadProfile();
-      
-      setShowPhotoUpload(false);
-      setPhotoFile(null);
-    } catch (err) {
-      setError(err.message || 'Failed to upload photo');
     } finally {
       setLoading(false);
     }
@@ -104,21 +58,15 @@ function DoctorDashboard() {
         <div className="doctor-profile-section">
           <div className="profile-card">
             <div className="profile-photo-container">
-              {profile.profile_photo ? (
+              {profile.photo_url ? (
                 <img 
-                  src={profile.profile_photo} 
+                  src={profile.photo_url} 
                   alt={profile.name}
                   className="profile-photo"
                 />
               ) : (
                 <div className="profile-photo-placeholder">No Photo</div>
               )}
-              <button 
-                onClick={() => setShowPhotoUpload(!showPhotoUpload)} 
-                className="btn-small btn-secondary"
-              >
-                {showPhotoUpload ? 'Cancel' : 'Update Photo'}
-              </button>
             </div>
             <div className="profile-info">
               <h2>{profile.name}</h2>
@@ -128,38 +76,6 @@ function DoctorDashboard() {
               {profile.bio && <p className="profile-bio">{profile.bio}</p>}
             </div>
           </div>
-
-          {showPhotoUpload && (
-            <div className="photo-upload-section">
-              <form onSubmit={handleUploadPhoto} className="photo-upload-form">
-                <div className="photo-preview-container-small">
-                  {photoPreview && photoFile ? (
-                    <img 
-                      src={photoPreview} 
-                      alt="Preview" 
-                      className="photo-preview-small"
-                    />
-                  ) : (
-                    <p>Select a new photo</p>
-                  )}
-                </div>
-
-                <div className="form-group">
-                  <input
-                    type="file"
-                    id="photo"
-                    accept="image/*"
-                    onChange={handlePhotoChange}
-                    className="file-input"
-                  />
-                </div>
-
-                <button type="submit" className="btn-primary" disabled={loading || !photoFile}>
-                  {loading ? 'Uploading...' : 'Upload Photo'}
-                </button>
-              </form>
-            </div>
-          )}
         </div>
       )}
 

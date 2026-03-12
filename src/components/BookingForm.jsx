@@ -145,15 +145,33 @@ function BookingForm({ department, doctor, timing, onSubmit, onCancel }) {
     <div className="booking-form-container">
       <h2>Book Appointment</h2>
       <div className="booking-info">
-        <p>
-          <strong>Department:</strong> {department.name || department.department_name}
-        </p>
-        <p>
-          <strong>Doctor:</strong> {doctor.name || doctor.doctor_name}
-        </p>
-        <p>
-          <strong>Qualification:</strong> {doctor.qualification || 'N/A'}
-        </p>
+        {/* Doctor Photo */}
+        <div className="doctor-booking-header">
+          <div className="doctor-photo-wrapper">
+            {doctor.photo_url ? (
+              <img 
+                src={doctor.photo_url} 
+                alt={doctor.name || doctor.doctor_name}
+                className="doctor-photo-booking"
+              />
+            ) : (
+              <div className="doctor-photo-placeholder-booking">
+                <span>{(doctor.name || doctor.doctor_name || '?').charAt(0)}</span>
+              </div>
+            )}
+          </div>
+          <div className="doctor-details-booking">
+            <p>
+              <strong>Department:</strong> {department.name || department.department_name}
+            </p>
+            <p>
+              <strong>Doctor:</strong> {doctor.name || doctor.doctor_name}
+            </p>
+            <p>
+              <strong>Qualification:</strong> {doctor.qualification || 'N/A'}
+            </p>
+          </div>
+        </div>
         {timing && timing.available_days && (
           <p>
             <strong>Available Days:</strong> {timing.available_days}

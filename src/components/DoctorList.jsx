@@ -35,9 +35,9 @@ function DoctorList({ doctors, onSelectDoctor, loading, onBack }) {
               onClick={() => onSelectDoctor(doctor)}
             >
               <div className="doctor-card-photo">
-                {doctor.profile_photo ? (
+                {doctor.photo_url ? (
                   <img 
-                    src={doctor.profile_photo} 
+                    src={doctor.photo_url} 
                     alt={doctor.name || doctor.doctor_name}
                     className="doctor-card-img"
                   />

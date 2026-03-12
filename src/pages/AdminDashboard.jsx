@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getAllDoctors, createDoctorLogin, uploadDoctorPhoto, getDoctorCredentials, getAdminAppointments, updateAppointmentStatus, updateDoctorCredentials } from '../api/api';
+import { getAllDoctors, createDoctorLogin, getDoctorCredentials, getAdminAppointments, updateAppointmentStatus, updateDoctorCredentials } from '../api/api';
 
 function AdminDashboard() {
   const [doctors, setDoctors] = useState([]);
@@ -17,11 +17,6 @@ function AdminDashboard() {
     email: '',
     password: '',
   });
-
-  const [showPhotoModal, setShowPhotoModal] = useState(false);
-  const [selectedDoctorForPhoto, setSelectedDoctorForPhoto] = useState(null);
-  const [photoFile, setPhotoFile] = useState(null);
-  const [photoPreview, setPhotoPreview] = useState(null);
 
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingCredential, setEditingCredential] = useState(null);
@@ -64,8 +59,6 @@ function AdminDashboard() {
     try {
       const data = await getDoctorCredentials();
       const formattedCredentials = data.map((cred, index) => {
-        // Find the full doctor object to get profile photo
-        const fullDoctor = doctors.find(d => d.code === cred.doctor_code);
         return {
           id: cred.id || index + 1,
           doctor: `${cred.doctor_name} - DOC-${cred.doctor_code}`,
@@ -73,7 +66,6 @@ function AdminDashboard() {
           doctorName: cred.doctor_name,
           email: cred.email,
           department: cred.department,
-          doctorObject: fullDoctor, // Include full doctor object
         };
       });
       setAssignedCredentials(formattedCredentials);
@@ -155,68 +147,6 @@ function AdminDashboard() {
       setCredentialForm({ email: '', password: '' });
     } catch (err) {
       setError(err.message || 'Failed to create login credentials');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePhotoChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setPhotoFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPhotoPreview(reader.result);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleOpenPhotoModal = (doctor) => {
-    setSelectedDoctorForPhoto(doctor);
-    setShowPhotoModal(true);
-    setPhotoFile(null);
-    setPhotoPreview(doctor.profile_photo || null);
-    setError('');
-    setSuccess('');
-  };
-
-  const handleUploadPhoto = async (e) => {
-    e.preventDefault();
-    if (!photoFile) {
-      setError('Please select a photo to upload');
-      return;
-    }
-    
-    try {
-      setLoading(true);
-      setError('');
-      setSuccess('');
-      
-      const formData = new FormData();
-      formData.append('profile_photo', photoFile);
-      
-      await uploadDoctorPhoto(selectedDoctorForPhoto.code, formData);
-      setSuccess(`Profile photo uploaded successfully for ${selectedDoctorForPhoto.name}`);
-      
-      // Refresh doctors list and credentials to show updated photo
-      const updatedDoctors = await loadDoctors();
-      await loadCredentials();
-      
-      // Update selectedDoctor if it's the one we just uploaded photo for
-      if (selectedDoctor && selectedDoctor.code === selectedDoctorForPhoto.code) {
-        const updatedDoctor = updatedDoctors.find(d => d.code === selectedDoctorForPhoto.code);
-        if (updatedDoctor) {
-          setSelectedDoctor(updatedDoctor);
-        }
-      }
-      
-      setShowPhotoModal(false);
-      setPhotoFile(null);
-      setPhotoPreview(null);
-      setSelectedDoctorForPhoto(null);
-    } catch (err) {
-      setError(err.message || 'Failed to upload photo');
     } finally {
       setLoading(false);
     }
@@ -465,18 +395,11 @@ function AdminDashboard() {
             <div className="selected-doctor-form">
               <div className="doctor-info-card">
                 <div className="doctor-avatar">
-                  {selectedDoctor.profile_photo ? (
-                    <img src={selectedDoctor.profile_photo} alt={selectedDoctor.name} />
+                  {selectedDoctor.photo_url ? (
+                    <img src={selectedDoctor.photo_url} alt={selectedDoctor.name} />
                   ) : (
                     <span>{selectedDoctor.name.charAt(0)}</span>
                   )}
-                  <button 
-                    onClick={() => handleOpenPhotoModal(selectedDoctor)}
-                    className="btn-upload-photo-overlay"
-                    type="button"
-                  >
-                    📷 Upload Photo
-                  </button>
                 </div>
                 <div className="doctor-details">
                   <h3>Dr. {selectedDoctor.name}</h3>
@@ -555,15 +478,7 @@ function AdminDashboard() {
                     <td>
                       <div className="doctor-cell">
                         <div className="doctor-avatar-small">
-                          {credential.doctorObject?.profile_photo ? (
-                            <img 
-                              src={credential.doctorObject.profile_photo} 
-                              alt={credential.doctorName}
-                              style={{width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover'}}
-                            />
-                          ) : (
-                            <span>{credential.doctorName.charAt(0)}</span>
-                          )}
+                          <span>{credential.doctorName.charAt(0)}</span>
                         </div>
                         <span>{credential.doctor}</span>
                       </div>
@@ -573,14 +488,6 @@ function AdminDashboard() {
                       <span className="password-hidden">••••••••</span>
                     </td>
                     <td>
-                      {credential.doctorObject && (
-                        <button 
-                          className="btn-action"
-                          onClick={() => handleOpenPhotoModal(credential.doctorObject)}
-                        >
-                          📷 Upload Photo
-                        </button>
-                      )}
                       <button 
                         className="btn-action"
                         onClick={() => handleOpenEditModal(credential)}
@@ -605,60 +512,6 @@ function AdminDashboard() {
         </>
       )}
 
-      {/* Photo Upload Modal */}
-      {showPhotoModal && selectedDoctorForPhoto && (
-        <div className="modal-overlay" onClick={() => setShowPhotoModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h3>Upload Profile Photo</h3>
-            <p className="modal-subtitle">
-              Doctor: {selectedDoctorForPhoto.name} ({selectedDoctorForPhoto.code})
-            </p>
-            
-            <form onSubmit={handleUploadPhoto} className="photo-upload-form">
-              <div className="photo-preview-container">
-                {photoPreview ? (
-                  <img 
-                    src={photoPreview} 
-                    alt="Preview" 
-                    className="photo-preview"
-                  />
-                ) : (
-                  <div className="photo-preview-placeholder">
-                    No photo selected
-                  </div>
-                )}
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="photo" className="file-input-label">
-                  Choose Photo
-                </label>
-                <input
-                  type="file"
-                  id="photo"
-                  accept="image/*"
-                  onChange={handlePhotoChange}
-                  className="file-input"
-                />
-              </div>
-
-              <div className="form-buttons">
-                <button type="submit" className="btn-primary" disabled={loading || !photoFile}>
-                  {loading ? 'Uploading...' : 'Upload Photo'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowPhotoModal(false)}
-                  className="btn-secondary"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
       {/* Edit Credentials Modal */}
       {showEditModal && editingCredential && (
         <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
@@ -669,35 +522,6 @@ function AdminDashboard() {
             </p>
             
             <form onSubmit={handleUpdateCredentials} className="edit-credentials-form">
-              {/* Photo Upload Section */}
-              {editingCredential.doctorObject && (
-                <div className="edit-photo-section">
-                  <div className="current-photo">
-                    {editingCredential.doctorObject.profile_photo ? (
-                      <img 
-                        src={editingCredential.doctorObject.profile_photo} 
-                        alt={editingCredential.doctorName}
-                        className="doctor-photo-large"
-                      />
-                    ) : (
-                      <div className="doctor-photo-placeholder-large">
-                        <span>{editingCredential.doctorName.charAt(0)}</span>
-                      </div>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowEditModal(false);
-                      handleOpenPhotoModal(editingCredential.doctorObject);
-                    }}
-                    className="btn-change-photo"
-                  >
-                    📷 Change Photo
-                  </button>
-                </div>
-              )}
-
               <div className="form-group">
                 <label htmlFor="edit-email">Email *</label>
                 <input

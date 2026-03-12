@@ -163,23 +163,6 @@ export const createDoctorLogin = async (doctorData) => {
   return handleResponse(response);
 };
 
-// Upload doctor profile photo (Admin only)
-export const uploadDoctorPhoto = async (doctorCode, formData) => {
-  if (!getCsrfToken()) {
-    await fetchCsrfToken();
-  }
-  const csrfToken = getCsrfToken();
-  const response = await fetch(`${API_BASE_URL}/profile/${doctorCode}/photo`, {
-    method: 'POST',
-    headers: {
-      'X-CSRFToken': csrfToken,
-    },
-    credentials: 'include',
-    body: formData, // Don't set Content-Type header, let browser set it with boundary
-  });
-  return handleResponse(response);
-};
-
 // Get doctor's own profile (for logged-in doctor)
 export const getDoctorOwnProfile = async () => {
   const response = await fetch(`${API_BASE_URL}/profile/me`, {
@@ -188,8 +171,8 @@ export const getDoctorOwnProfile = async () => {
   return handleResponse(response);
 };
 
-// Update doctor's own profile (for logged-in doctor)
-export const updateDoctorOwnProfile = async (formData) => {
+// Update doctor's own profile bio (for logged-in doctor)
+export const updateDoctorOwnProfile = async (bioData) => {
   if (!getCsrfToken()) {
     await fetchCsrfToken();
   }
@@ -197,10 +180,11 @@ export const updateDoctorOwnProfile = async (formData) => {
   const response = await fetch(`${API_BASE_URL}/profile/me`, {
     method: 'PUT',
     headers: {
+      'Content-Type': 'application/json',
       'X-CSRFToken': csrfToken,
     },
     credentials: 'include',
-    body: formData,
+    body: JSON.stringify(bioData),
   });
   return handleResponse(response);
 };
