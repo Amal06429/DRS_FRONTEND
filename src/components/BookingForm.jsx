@@ -1,99 +1,42 @@
 import { useState, useEffect } from 'react';
-import { formatTimeSlot, isSlotAvailable } from '../utils/timeUtils';
-import { getDoctorAppointments } from '../api/api';
+import { getDoctorSlots } from '../api/api';
 
-function BookingForm({ department, doctor, timing, onSubmit, onCancel }) {
+function BookingForm({ department, doctor, onSubmit, onCancel }) {
   const [formData, setFormData] = useState({
     patient_name: '',
     phone_number: '',
     email: '',
     appointment_date: '',
-    selected_slot: '',
-    appointment_time: '',
+    selected_slot: null,
   });
   
-  const [appointmentsOnDate, setAppointmentsOnDate] = useState([]);
-  const [loadingAppointments, setLoadingAppointments] = useState(false);
+  const [slots, setSlots] = useState([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  // Fetch appointments when date or doctor changes
+  // Fetch dynamic slots when date changes or after booking
   useEffect(() => {
-    const fetchAppointments = async () => {
-      if (formData.appointment_date && doctor && (doctor.code || doctor.doctor_code)) {
-        setLoadingAppointments(true);
+    const fetchSlots = async () => {
+      if (formData.appointment_date && doctor) {
+        setLoadingSlots(true);
         try {
           const doctorCode = doctor.code || doctor.doctor_code;
-          const appointments = await getDoctorAppointments(doctorCode);
-          
-          // Filter appointments for the selected date (exclude rejected)
-          const selectedDate = formData.appointment_date;
-          const filteredAppointments = appointments.filter(apt => {
-            const aptDate = new Date(apt.appointment_date).toISOString().split('T')[0];
-            return aptDate === selectedDate && apt.status !== 'rejected';
-          });
-          
-          setAppointmentsOnDate(filteredAppointments);
+          const slotsData = await getDoctorSlots(doctorCode, formData.appointment_date);
+          setSlots(slotsData);
+          console.log('Slots loaded:', slotsData); // Debug log
         } catch (error) {
-          console.error('Error fetching appointments:', error);
-          setAppointmentsOnDate([]);
+          console.error('Error fetching slots:', error);
+          setSlots([]);
         } finally {
-          setLoadingAppointments(false);
+          setLoadingSlots(false);
         }
       } else {
-        setAppointmentsOnDate([]);
+        setSlots([]);
       }
     };
     
-    fetchAppointments();
-  }, [formData.appointment_date, doctor]);
-  
-  // Get available slots from doctor.timings (preferred) or timing prop (fallback)
-  const availableSlots = (doctor.timings || timing || []).filter(isSlotAvailable);
-  const hasSlots = availableSlots.length > 0;
-  
-  // Compute booked slots and times from appointments on selected date
-  const bookedSlotNumbers = new Set(
-    appointmentsOnDate
-      .filter(apt => apt.slot_number)
-      .map(apt => apt.slot_number.toString())
-  );
-  
-  const bookedTimes = new Set(
-    appointmentsOnDate
-      .filter(apt => !apt.slot_number && apt.appointment_date)
-      .map(apt => {
-        const date = new Date(apt.appointment_date);
-        return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-      })
-  );
-  
-  // Create slot status map for display
-  const slotStatusMap = {};
-  availableSlots.forEach(slot => {
-    const slotNum = slot.slno.toString();
-    const appointment = appointmentsOnDate.find(apt => apt.slot_number?.toString() === slotNum);
-    slotStatusMap[slotNum] = appointment ? {
-      status: 'booked',
-      patientName: appointment.patient_name
-    } : {
-      status: 'vacant'
-    };
-  });
-  
-  // Standard appointment times for doctors without slots
-  const standardTimes = [
-    { value: '09:00', label: '09:00 AM' },
-    { value: '09:30', label: '09:30 AM' },
-    { value: '10:00', label: '10:00 AM' },
-    { value: '10:30', label: '10:30 AM' },
-    { value: '11:00', label: '11:00 AM' },
-    { value: '11:30', label: '11:30 AM' },
-    { value: '12:00', label: '12:00 PM' },
-    { value: '14:00', label: '02:00 PM' },
-    { value: '14:30', label: '02:30 PM' },
-    { value: '15:00', label: '03:00 PM' },
-    { value: '15:30', label: '03:30 PM' },
-    { value: '16:00', label: '04:00 PM' },
-  ];
+    fetchSlots();
+  }, [formData.appointment_date, doctor, refreshKey]);
 
   const handleChange = (e) => {
     setFormData({
@@ -101,33 +44,28 @@ function BookingForm({ department, doctor, timing, onSubmit, onCancel }) {
       [e.target.name]: e.target.value,
     });
   };
-  
-  // Get selected timing details
-  const selectedTiming = availableSlots.find(
-    slot => slot.slno.toString() === formData.selected_slot
-  );
 
-  const handleSubmit = (e) => {
+  const handleSlotSelect = (slot) => {
+    if (slot.status === 'Vacant') {
+      setFormData({
+        ...formData,
+        selected_slot: slot,
+      });
+    }
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Convert date to ISO datetime format with time from selected slot or standard time
-    let appointmentDateTime;
-    if (selectedTiming && selectedTiming.t1) {
-      // Use slot time
-      const hours = Math.floor(selectedTiming.t1);
-      const minutes = Math.round((selectedTiming.t1 - hours) * 60);
-      appointmentDateTime = new Date(
-        formData.appointment_date + `T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`
-      );
-    } else if (formData.appointment_time) {
-      // Use standard time selection
-      appointmentDateTime = new Date(
-        formData.appointment_date + `T${formData.appointment_time}:00`
-      );
-    } else {
-      // Default to 10:00 AM
-      appointmentDateTime = new Date(formData.appointment_date + 'T10:00:00');
+    if (!formData.selected_slot) {
+      alert('Please select a time slot');
+      return;
     }
+
+    // Combine date and time
+    const appointmentDateTime = new Date(
+      `${formData.appointment_date}T${formData.selected_slot.start_time}:00`
+    );
     
     const appointmentData = {
       patient_name: formData.patient_name,
@@ -136,16 +74,35 @@ function BookingForm({ department, doctor, timing, onSubmit, onCancel }) {
       doctor_code: doctor.code || doctor.doctor_code,
       department_code: department.code || department.department_code,
       appointment_date: appointmentDateTime.toISOString(),
-      slot_number: formData.selected_slot || null,
+      slot_number: formData.selected_slot.slot_number,
     };
-    onSubmit(appointmentData);
+    
+    // Call parent submit handler
+    await onSubmit(appointmentData);
+    
+    // Refresh slots to show the newly booked slot as "Booked"
+    setRefreshKey(prev => prev + 1);
+    
+    // Clear selected slot
+    setFormData({
+      ...formData,
+      selected_slot: null,
+    });
   };
+
+  // Group slots by slot_number
+  const groupedSlots = slots.reduce((acc, slot) => {
+    if (!acc[slot.slot_number]) {
+      acc[slot.slot_number] = [];
+    }
+    acc[slot.slot_number].push(slot);
+    return acc;
+  }, {});
 
   return (
     <div className="booking-form-container">
       <h2>Book Appointment</h2>
       <div className="booking-info">
-        {/* Doctor Photo */}
         <div className="doctor-booking-header">
           <div className="doctor-photo-wrapper">
             {doctor.photo_url ? (
@@ -172,16 +129,6 @@ function BookingForm({ department, doctor, timing, onSubmit, onCancel }) {
             </p>
           </div>
         </div>
-        {timing && timing.available_days && (
-          <p>
-            <strong>Available Days:</strong> {timing.available_days}
-          </p>
-        )}
-        {timing && timing.time_slot && (
-          <p>
-            <strong>Time Slot:</strong> {timing.time_slot}
-          </p>
-        )}
       </div>
 
       <form onSubmit={handleSubmit} className="booking-form">
@@ -238,128 +185,59 @@ function BookingForm({ department, doctor, timing, onSubmit, onCancel }) {
           />
         </div>
 
-        {/* For doctors WITH slots - Split into Slot Number and Time fields */}
-        {hasSlots && (
-          <>
-            <div className="form-group">
-              <label htmlFor="selected_slot">Slot Number *</label>
-              <select
-                id="selected_slot"
-                name="selected_slot"
-                value={formData.selected_slot}
-                onChange={handleChange}
-                required
-                disabled={loadingAppointments}
-              >
-                <option value="">-- Choose a slot --</option>
-                {availableSlots.map((slot) => {
-                  const slotNum = slot.slno.toString();
-                  const isBooked = bookedSlotNumbers.has(slotNum);
-                  const slotStatus = slotStatusMap[slotNum];
-                  return (
-                    <option 
-                      key={slot.slno} 
-                      value={slot.slno}
-                      disabled={isBooked}
-                    >
-                      Slot {slot.slno} {isBooked ? `(Booked - ${slotStatus?.patientName})` : '(Available)'}
-                    </option>
-                  );
-                })}
-              </select>
-              {loadingAppointments && (
-                <small className="form-hint">Loading availability...</small>
-              )}
-            </div>
-            
-            {/* Slot Status Display */}
-            {formData.appointment_date && availableSlots.length > 0 && (
-              <div className="slot-status-display">
-                <h4>Slot Availability Status</h4>
-                <div className="slot-status-list">
-                  {availableSlots.map((slot) => {
-                    const slotNum = slot.slno.toString();
-                    const slotStatus = slotStatusMap[slotNum];
-                    const timeRange = formatTimeSlot(slot.t1, slot.t2);
-                    
-                    return (
-                      <div 
-                        key={slot.slno} 
-                        className={`slot-status-item ${slotStatus?.status === 'booked' ? 'booked' : 'vacant'}`}
-                      >
-                        <span className="slot-number">Slot {slot.slno}</span>
-                        <span className="slot-time">{timeRange}</span>
-                        <span className="slot-status">
-                          {slotStatus?.status === 'booked' ? (
-                            <span className="status-booked">Booked ({slotStatus.patientName})</span>
-                          ) : (
-                            <span className="status-vacant">Vacant</span>
-                          )}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
+        {/* Dynamic Slot Selection */}
+        {formData.appointment_date && (
+          <div className="form-group">
+            <label>Select Time Slot *</label>
+            {loadingSlots ? (
+              <p className="loading-text">Loading available slots...</p>
+            ) : slots.length === 0 ? (
+              <p className="no-slots-text">No slots available for this date</p>
+            ) : (
+              <div className="slots-container">
+                {Object.entries(groupedSlots).map(([slotNumber, slotGroup]) => (
+                  <div key={slotNumber} className="slot-group">
+                    <h4>Session {slotNumber}</h4>
+                    <div className="slot-grid">
+                      {slotGroup.map((slot, index) => {
+                        const isBooked = slot.status === 'Booked';
+                        const isSelected = formData.selected_slot?.start_time === slot.start_time &&
+                                          formData.selected_slot?.slot_number === slot.slot_number;
+                        
+                        return (
+                          <button
+                            key={index}
+                            type="button"
+                            className={`slot-button ${
+                              isBooked ? 'booked' : 'vacant'
+                            } ${
+                              isSelected ? 'selected' : ''
+                            }`}
+                            onClick={() => handleSlotSelect(slot)}
+                            disabled={isBooked}
+                          >
+                            <div className="slot-time">
+                              {slot.start_time} - {slot.end_time}
+                            </div>
+                            <div className="slot-status-badge">
+                              {slot.status}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
-            
-            {selectedTiming && (
-              <div className="form-group">
-                <label htmlFor="slot_time">Appointment Time</label>
-                <input
-                  type="text"
-                  id="slot_time"
-                  value={formatTimeSlot(selectedTiming.t1, selectedTiming.t2)}
-                  disabled
-                  className="disabled-input"
-                />
-                <small className="form-hint">
-                  Time is automatically set based on selected slot
-                </small>
-              </div>
-            )}
-          </>
+          </div>
         )}
 
-        {/* For doctors WITHOUT slots - Standard time selection dropdown */}
-        {!hasSlots && (
-          <div className="form-group">
-            <label htmlFor="appointment_time">Appointment Time *</label>
-            <select
-              id="appointment_time"
-              name="appointment_time"
-              value={formData.appointment_time}
-              onChange={handleChange}
-              required
-              disabled={loadingAppointments}
-            >
-              <option value="">-- Choose a time --</option>
-              {standardTimes.map((time) => {
-                const isBooked = bookedTimes.has(time.value);
-                const bookedAppointment = appointmentsOnDate.find(apt => {
-                  if (!apt.appointment_date) return false;
-                  const date = new Date(apt.appointment_date);
-                  const timeStr = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-                  return timeStr === time.value;
-                });
-                return (
-                  <option 
-                    key={time.value} 
-                    value={time.value}
-                    disabled={isBooked}
-                  >
-                    {time.label} {isBooked ? `(Booked - ${bookedAppointment?.patient_name})` : '(Available)'}
-                  </option>
-                );
-              })}
-            </select>
-            {loadingAppointments ? (
-              <small className="form-hint">Loading availability...</small>
-            ) : (
-              <small className="form-hint">
-                Select a preferred appointment time
-              </small>
-            )}
+        {formData.selected_slot && (
+          <div className="selected-slot-info">
+            <p>
+              <strong>Selected:</strong> Session {formData.selected_slot.slot_number} - {formData.selected_slot.start_time} to {formData.selected_slot.end_time}
+            </p>
           </div>
         )}
 
@@ -367,6 +245,7 @@ function BookingForm({ department, doctor, timing, onSubmit, onCancel }) {
           <button 
             type="submit" 
             className="btn-primary"
+            disabled={!formData.selected_slot}
           >
             Book Appointment
           </button>

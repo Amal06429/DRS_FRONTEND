@@ -2683,3 +2683,136 @@
 }
 
 /* end of stylesheet */
+
+/* Dynamic Slot Selection Styles */
+.slots-container {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  margin-top: 1rem;
+}
+
+.slot-group {
+  background: #f8f9fa;
+  padding: 1.5rem;
+  border-radius: 10px;
+  border: 2px solid #e0e0e0;
+}
+
+.slot-group h4 {
+  color: #2c3e50;
+  margin-bottom: 1rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.slot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.75rem;
+}
+
+.slot-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem 0.75rem;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.3s;
+  min-height: 70px;
+}
+
+.slot-button.vacant {
+  border-color: #27ae60;
+  background: #f0fff4;
+}
+
+.slot-button.vacant:hover {
+  background: #27ae60;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(39, 174, 96, 0.3);
+}
+
+.slot-button.vacant:hover .slot-time,
+.slot-button.vacant:hover .slot-status-badge {
+  color: white;
+}
+
+.slot-button.booked {
+  border-color: #e74c3c;
+  background: #fff5f5;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.slot-button.selected {
+  border-color: #3498db;
+  background: #3498db;
+  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.4);
+}
+
+.slot-button.selected .slot-time,
+.slot-button.selected .slot-status-badge {
+  color: white;
+}
+
+.slot-time {
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 0.95rem;
+  margin-bottom: 0.25rem;
+}
+
+.slot-status-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #7f8c8d;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.selected-slot-info {
+  background: linear-gradient(135deg, #ebf8ff 0%, #e0f2fe 100%);
+  padding: 1rem 1.5rem;
+  border-radius: 8px;
+  border-left: 4px solid #3498db;
+  margin-top: 1rem;
+}
+
+.selected-slot-info p {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 1rem;
+}
+
+.loading-text {
+  text-align: center;
+  color: #7f8c8d;
+  font-style: italic;
+  padding: 2rem;
+}
+
+.no-slots-text {
+  text-align: center;
+  color: #e74c3c;
+  font-style: italic;
+  padding: 2rem;
+  background: #fff5f5;
+  border-radius: 8px;
+  border: 1px solid #f8d7da;
+}
+
+@media (max-width: 768px) {
+  .slot-grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  }
+  
+  .slot-button {
+    min-height: 60px;
+    padding: 0.75rem 0.5rem;
+  }
+}

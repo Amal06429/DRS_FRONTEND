@@ -82,13 +82,20 @@ function Booking() {
       setLoading(true);
       setError('');
       setSuccess('');
-      await bookAppointment(appointmentData);
-      setSuccess('Appointment booked successfully!');
+      
+      const response = await bookAppointment(appointmentData);
+      
+      setSuccess('Appointment booked successfully! Waiting for admin approval.');
+      
+      // Wait 3 seconds before redirecting
       setTimeout(() => {
         navigate('/');
-      }, 2000);
+      }, 3000);
+      
+      return response;
     } catch (err) {
       setError(err.message || 'Failed to book appointment');
+      throw err;
     } finally {
       setLoading(false);
     }
@@ -118,7 +125,7 @@ function Booking() {
           onBack={handleBackToDepartments}
         />
       ) : (
-        <>{!loading && !success && (
+        <>{!success && (
           <BookingForm
             department={selectedDepartment}
             doctor={selectedDoctor}

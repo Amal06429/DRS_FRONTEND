@@ -232,3 +232,9 @@ export const updateDoctorCredentials = async (doctorCode, credentialData) => {
   });
   return handleResponse(response);
 };
+
+// Get dynamic slots for a doctor on a specific date
+export const getDoctorSlots = async (doctorCode, date) => {
+  const response = await fetch(`${API_BASE_URL}/slots/?doctor_code=${doctorCode}&date=${date}`);
+  return handleResponse(response);
+};
